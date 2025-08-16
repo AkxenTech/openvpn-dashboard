@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  openvpn-dashboard:
+    build: .
+    container_name: openvpn-dashboard
+    ports:
+      - "5000:5000"
+    environment:
+      - MONGODB_URI=${MONGODB_URI}
+      - MONGODB_DATABASE=${MONGODB_DATABASE:-openvpn_logs}
+      - MONGODB_COLLECTION=${MONGODB_COLLECTION:-connection_logs}
+      - DASHBOARD_PORT=5000
+      - DASHBOARD_HOST=0.0.0.0
+      - FLASK_ENV=production
+      - FLASK_DEBUG=False
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-this}
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - dashboard-network
+
+networks:
+  dashboard-network:
+    driver: bridge
