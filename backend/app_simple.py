@@ -220,13 +220,17 @@ def get_server_status(server_name, server_location):
             'type': 'connection_event'
         }, sort=[('timestamp', -1)])
         
-        # Extract public IP from system stats
+        # Extract public IP and uptime from system stats
         public_ip_from_stats = None
         last_system_update = None
+        uptime_from_stats = None
         if latest_stats and 'interfaces' in latest_stats:
             public_ip_from_stats = extract_public_ip_from_interfaces(latest_stats['interfaces'])
             last_system_update = latest_stats.get('timestamp')
-            logger.info(f"Server {server_name}: public_ip_from_stats={public_ip_from_stats}")
+            # Extract uptime from system stats
+            if 'stats' in latest_stats and 'uptime' in latest_stats['stats']:
+                uptime_from_stats = latest_stats['stats']['uptime']
+            logger.info(f"Server {server_name}: public_ip_from_stats={public_ip_from_stats}, uptime_from_stats={uptime_from_stats}")
         
         # Determine final public IP (prioritize heartbeat, fallback to stats)
         final_public_ip = None
@@ -254,7 +258,7 @@ def get_server_status(server_name, server_location):
             'server_location': server_location,
             'status': 'online' if is_online else 'offline',
             'public_ip': final_public_ip,
-            'uptime': latest_heartbeat.get('uptime') if latest_heartbeat else None,
+            'uptime': uptime_from_stats if uptime_from_stats else (latest_heartbeat.get('uptime') if latest_heartbeat else None),
             'last_seen': last_system_update,  # Use last_system_update directly
             'last_seen_toronto': convert_to_toronto_time(last_system_update) if last_system_update else None,
             'last_heartbeat': latest_heartbeat.get('timestamp') if latest_heartbeat else None,
