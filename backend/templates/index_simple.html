@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenVPN Dashboard - Multi-Server Monitoring</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <header class="dashboard-header">
+            <div class="header-content">
+                <h1><i class="fas fa-shield-alt"></i> OpenVPN Dashboard</h1>
+                <p>Multi-server monitoring and analytics</p>
+                <div class="header-stats">
+                    <div class="stat-item">
+                        <span class="stat-value" id="total-servers">-</span>
+                        <span class="stat-label">Servers</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="online-servers">-</span>
+                        <span class="stat-label">Online</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="offline-servers">-</span>
+                        <span class="stat-label">Offline</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="dashboard-main">
+            <!-- Control Panel -->
+            <div class="control-panel">
+                <button class="btn btn-primary" id="auto-refresh-btn">
+                    <i class="fas fa-clock"></i> Disable Auto-Refresh
+                </button>
+                <div class="status-indicator">
+                    <span class="status-dot" id="connectivity-status"></span>
+                    <span>Database Status</span>
+                </div>
+            </div>
+
+            <!-- Error Display -->
+            <div id="error-container" class="error-container" style="display: none;"></div>
+
+            <!-- Dashboard Grid -->
+            <div class="dashboard-grid">
+                <!-- Server Status Cards -->
+                <div class="dashboard-section">
+                    <h2><i class="fas fa-server"></i> Server Status</h2>
+                    <div class="server-grid" id="server-grid">
+                        <div class="loading">Loading servers...</div>
+                    </div>
+                </div>
+
+                <!-- Analytics Section -->
+                <div class="dashboard-section">
+                    <h2><i class="fas fa-chart-line"></i> Analytics</h2>
+                    <div class="analytics-grid">
+                        <div class="analytics-card">
+                            <h3>Connection Trends</h3>
+                            <div class="chart-container">
+                                <canvas id="connection-chart"></canvas>
+                            </div>
+                        </div>
+                        <div class="analytics-card">
+                            <h3>Top Users</h3>
+                            <div id="user-analytics">
+                                <div class="loading">Loading user data...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="{{ url_for('static', filename='js/dashboard_simple.js') }}"></script>
+</body>
+</html>

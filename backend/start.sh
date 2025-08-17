@@ -7,5 +7,5 @@ echo "Starting OpenVPN Dashboard..."
 export FLASK_ENV=production
 export FLASK_DEBUG=False
 
-# Start the application with Gunicorn
-exec gunicorn --config gunicorn.conf.py app:app
+# Start the application with Gunicorn using the simplified app
+exec gunicorn --config gunicorn.conf.py app_simple:app

@@ -2,6 +2,6 @@
 # Build script for Render deployment
 
 echo "Installing Python dependencies..."
-pip install -r requirements.txt
+pip install -r requirements_simple.txt
 
 echo "Build completed successfully!"
