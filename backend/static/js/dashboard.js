@@ -105,7 +105,7 @@ class OpenVPNDashboard {
     createServerCard(server) {
         const statusClass = server.status === 'online' ? 'online' : 'offline';
         const uptime = server.uptime_seconds ? this.formatUptime(server.uptime_seconds) : 'Unknown';
-        const lastSeen = server.last_seen ? new Date(server.last_seen).toLocaleString() : 'Never';
+        const lastSeen = server.last_system_update ? new Date(server.last_system_update).toLocaleString() : 'Never';
         
         return `
             <div class="server-card ${statusClass}">

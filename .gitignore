@@ -65,8 +65,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Docker
-.dockerignore
+# Docker (removed - using native macOS deployment)
 
 # Temporary files
 *.tmp

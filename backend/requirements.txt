@@ -7,3 +7,4 @@ python-socketio==5.9.0
 eventlet==0.33.3
 dnspython==2.4.2
 Werkzeug==2.3.7
+pytz==2023.3

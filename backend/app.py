@@ -13,6 +13,7 @@ from flask_socketio import SocketIO, emit
 from pymongo import MongoClient
 from dotenv import load_dotenv
 import logging
+import pytz
 
 # Load environment variables
 load_dotenv()
@@ -26,6 +27,44 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+# Timezone handling
+def convert_to_toronto_time(utc_time):
+    """Convert UTC time to Toronto timezone"""
+    if not utc_time:
+        return None
+    try:
+        toronto_tz = pytz.timezone('America/Toronto')
+        if utc_time.tzinfo is None:
+            utc_time = pytz.utc.localize(utc_time)
+        return utc_time.astimezone(toronto_tz)
+    except Exception as e:
+        logger.error(f"Error converting timezone: {e}")
+        return utc_time
+
+def extract_public_ip_from_interfaces(interfaces):
+    """Extract public IP from system interfaces"""
+    if not interfaces:
+        return None
+    
+    # Priority order for public IP detection
+    # 1. ens4 (usually external interface)
+    # 2. enp1s0 (alternative external interface)
+    # 3. ens3 (internal interface)
+    # 4. Any interface that's not loopback or tunnel
+    
+    if 'ens4' in interfaces:
+        return interfaces['ens4'].get('ip')
+    elif 'enp1s0' in interfaces:
+        return interfaces['enp1s0'].get('ip')
+    elif 'ens3' in interfaces:
+        return interfaces['ens3'].get('ip')
+    else:
+        # Find any interface that's not loopback or tunnel
+        for interface_name, interface_data in interfaces.items():
+            if interface_name not in ['lo', 'tun0', 'tun1']:
+                return interface_data.get('ip')
+        return None
 
 # MongoDB connection
 def get_mongodb_client():
@@ -55,7 +94,7 @@ def get_database():
 def get_collection():
     """Get collection instance"""
     db = get_database()
-    if db:
+    if db is not None:
         collection = os.getenv('MONGODB_COLLECTION', 'connection_logs')
         return db[collection]
     return None
@@ -65,32 +104,26 @@ def get_all_servers():
     """Get all unique servers from the database"""
     try:
         collection = get_collection()
-        if not collection:
+        if collection is None:
             return []
         
-        # Get unique server combinations (name + location)
-        pipeline = [
-            {
-                '$group': {
-                    '_id': {
-                        'server_name': '$server_name',
-                        'server_location': '$server_location'
-                    }
-                }
-            },
-            {
-                '$project': {
-                    'server_name': '$_id.server_name',
-                    'server_location': '$_id.server_location',
-                    '_id': 0
-                }
-            },
-            {
-                '$sort': {'server_name': 1}
-            }
-        ]
+        # Simple approach: get all documents and extract unique server combinations
+        all_docs = collection.find({}, {'server_name': 1, 'server_location': 1, '_id': 0})
         
-        servers = list(collection.aggregate(pipeline))
+        # Use a set to track unique combinations
+        server_combinations = set()
+        for doc in all_docs:
+            if 'server_name' in doc and 'server_location' in doc:
+                server_combinations.add((doc['server_name'], doc['server_location']))
+        
+        # Convert to list of dictionaries
+        servers = []
+        for name, location in sorted(server_combinations):
+            servers.append({
+                'server_name': name,
+                'server_location': location
+            })
+        
         logger.info(f"Found {len(servers)} servers")
         return servers
     except Exception as e:
@@ -101,7 +134,7 @@ def check_server_connectivity():
     """Check connectivity status of all servers via heartbeats"""
     try:
         collection = get_collection()
-        if not collection:
+        if collection is None:
             return []
         
         # Get latest heartbeat from each server
@@ -153,10 +186,33 @@ def get_server_status(server_name, server_location):
     """Get detailed status for a specific server"""
     try:
         collection = get_collection()
-        if not collection:
+        if collection is None:
             return None
         
-        # Get latest connection event
+        # Get latest system stats
+        logger.info(f"Server {server_name}: Querying for system_stats with server_name={server_name}, server_location={server_location}")
+        latest_stats = collection.find_one(
+            {
+                'server_name': server_name,
+                'server_location': server_location,
+                'type': 'system_stats'
+            },
+            sort=[('timestamp', -1)]
+        )
+        
+        # Debug: Log what we found for system stats
+        if latest_stats:
+            logger.info(f"Server {server_name}: Found system_stats with timestamp {latest_stats.get('timestamp')}")
+        else:
+            logger.info(f"Server {server_name}: No system_stats found")
+            
+            # Try a broader search to see what's available
+            all_stats = list(collection.find({'type': 'system_stats'}).limit(5))
+            logger.info(f"Server {server_name}: Found {len(all_stats)} total system_stats documents")
+            for doc in all_stats:
+                logger.info(f"Server {server_name}: Found stats doc with server_name={doc.get('server_name')}, server_location={doc.get('server_location')}, timestamp={doc.get('timestamp')}")
+        
+        # Get latest connection event (for active connections count only)
         latest_connection = collection.find_one(
             {
                 'server_name': server_name,
@@ -166,15 +222,18 @@ def get_server_status(server_name, server_location):
             sort=[('timestamp', -1)]
         )
         
-        # Get latest system stats
-        latest_stats = collection.find_one(
-            {
-                'server_name': server_name,
-                'server_location': server_location,
-                'type': 'system_stats'
-            },
-            sort=[('timestamp', -1)]
-        )
+        # Extract public IP and last update time from system stats
+        public_ip_from_stats = None
+        last_system_update = None
+        if latest_stats:
+            # Extract public IP from interfaces
+            interfaces = latest_stats.get('interfaces', {})
+            public_ip_from_stats = extract_public_ip_from_interfaces(interfaces)
+            logger.info(f"Server {server_name}: interfaces={list(interfaces.keys()) if interfaces else 'None'}, extracted_public_ip={public_ip_from_stats}")
+            
+            # Extract last update time
+            if latest_stats.get('timestamp'):
+                last_system_update = latest_stats['timestamp']
         
         # Get latest heartbeat
         latest_heartbeat = collection.find_one(
@@ -195,26 +254,43 @@ def get_server_status(server_name, server_location):
             'timestamp': {'$gte': five_minutes_ago}
         })
         
-        # Determine server status (prioritize heartbeat over connection events)
+        # Determine server status (use system_stats as primary indicator)
         is_online = False
-        if latest_heartbeat and latest_heartbeat.get('timestamp'):
+        if last_system_update:
+            time_diff = datetime.utcnow() - last_system_update
+            time_diff_seconds = abs(time_diff.total_seconds())  # Use absolute value to handle clock drift
+            is_online = time_diff_seconds < 14400  # 4 hours to handle timezone differences (Toronto EDT = UTC-4)
+            logger.info(f"Server {server_name}: last_system_update={last_system_update}, current_time={datetime.utcnow()}, time_diff_seconds={time_diff_seconds}, is_online={is_online}")
+        elif latest_heartbeat and latest_heartbeat.get('timestamp'):
             time_diff = datetime.utcnow() - latest_heartbeat['timestamp']
             is_online = time_diff.total_seconds() < 300  # 5 minutes
         elif latest_connection and latest_connection.get('timestamp'):
             time_diff = datetime.utcnow() - latest_connection['timestamp']
             is_online = time_diff.total_seconds() < 300  # 5 minutes
         
+        # Debug: Check what latest_stats contains
+        logger.info(f"Server {server_name}: latest_stats timestamp = {latest_stats.get('timestamp') if latest_stats else 'None'}")
+        logger.info(f"Server {server_name}: last_system_update = {last_system_update}")
+        logger.info(f"Server {server_name}: CODE UPDATED - Using system_stats for last_seen")
+        
         status = {
             'server_name': server_name,
             'server_location': server_location,
             'status': 'online' if is_online else 'offline',
-            'last_seen': latest_connection.get('timestamp') if latest_connection else None,
+            'last_seen': last_system_update,  # Use last_system_update directly
+            'last_seen_toronto': convert_to_toronto_time(last_system_update) if last_system_update else None,
             'last_heartbeat': latest_heartbeat.get('timestamp') if latest_heartbeat else None,
-            'public_ip': latest_heartbeat.get('public_ip') if latest_heartbeat else None,
+            'last_heartbeat_toronto': convert_to_toronto_time(latest_heartbeat.get('timestamp')) if latest_heartbeat else None,
+            'last_system_update': last_system_update,
+            'last_system_update_toronto': convert_to_toronto_time(last_system_update) if last_system_update else None,
+            'public_ip': latest_heartbeat.get('public_ip') if latest_heartbeat else public_ip_from_stats,
             'uptime_seconds': latest_heartbeat.get('uptime') if latest_heartbeat else None,
             'active_connections': active_connections,
             'system_stats': latest_stats.get('stats', {}) if latest_stats else {}
         }
+        
+        # Debug print to see what's being returned
+        print(f"DEBUG: Server {server_name} - public_ip_from_stats: {public_ip_from_stats}, final_public_ip: {status['public_ip']}")
         
         return status
     except Exception as e:
@@ -234,11 +310,13 @@ def health_check():
         client = get_mongodb_client()
         if client:
             client.admin.command('ping')
+            servers = get_all_servers()
+            logger.info(f"Health check: Found {len(servers)} servers")
             return jsonify({
                 'status': 'healthy',
                 'mongodb': 'connected',
                 'timestamp': datetime.utcnow().isoformat(),
-                'servers_count': len(get_all_servers())
+                'servers_count': len(servers)
             })
         else:
             return jsonify({
@@ -254,18 +332,53 @@ def health_check():
             'timestamp': datetime.utcnow().isoformat()
         }), 500
 
+@app.route('/api/test')
+def test_endpoint():
+    """Test endpoint to verify code is updated"""
+    try:
+        servers = get_all_servers()
+        return jsonify({
+            'message': 'Test endpoint working',
+            'servers_found': len(servers),
+            'servers': servers
+        })
+    except Exception as e:
+        return jsonify({
+            'error': str(e)
+        }), 500
+
 @app.route('/api/servers')
 def get_servers():
     """Get list of all servers with their status"""
     try:
+        logger.info("API /api/servers called")
         servers = get_all_servers()
+        logger.info(f"get_all_servers() returned {len(servers)} servers")
         server_statuses = []
         
         for server in servers:
+            logger.info(f"Processing server: {server}")
             status = get_server_status(server['server_name'], server['server_location'])
+            logger.info(f"get_server_status returned: {status}")
             if status:
                 server_statuses.append(status)
+                logger.info(f"Added status for {server['server_name']} with public_ip: {status.get('public_ip')}")
+            else:
+                # Include server even if no recent status data
+                server_statuses.append({
+                    'server_name': server['server_name'],
+                    'server_location': server['server_location'],
+                    'status': 'unknown',
+                    'last_seen': None,
+                    'last_heartbeat': None,
+                    'public_ip': None,
+                    'uptime_seconds': None,
+                    'active_connections': 0,
+                    'system_stats': {}
+                })
+                logger.info(f"Added unknown status for {server['server_name']}")
         
+        logger.info(f"Returning {len(server_statuses)} server statuses")
         return jsonify(server_statuses)
     except Exception as e:
         logger.error(f"Error getting servers: {e}")
@@ -281,7 +394,7 @@ def get_server_status_endpoint(server_name):
         if not server_location:
             # Find the server location from database
             collection = get_collection()
-            if collection:
+            if collection is not None:
                 server_doc = collection.find_one({'server_name': server_name})
                 if server_doc:
                     server_location = server_doc.get('server_location')
@@ -307,7 +420,7 @@ def get_server_connections(server_name):
             return jsonify({'error': 'Server location required'}), 400
         
         collection = get_collection()
-        if not collection:
+        if collection is None:
             return jsonify({'error': 'Database connection failed'}), 500
         
         # Get recent authenticated connections
@@ -335,7 +448,7 @@ def get_connection_analytics():
     """Get connection analytics across all servers"""
     try:
         collection = get_collection()
-        if not collection:
+        if collection is None:
             return jsonify({'error': 'Database connection failed'}), 500
         
         # Get last 24 hours of data
@@ -394,7 +507,7 @@ def get_live_connections():
     """Get live connection feed from all servers"""
     try:
         collection = get_collection()
-        if not collection:
+        if collection is None:
             return jsonify({'error': 'Database connection failed'}), 500
         
         # Get recent events (last 10 minutes)
@@ -419,7 +532,7 @@ def get_user_analytics():
     """Get user activity analytics"""
     try:
         collection = get_collection()
-        if not collection:
+        if collection is None:
             return jsonify({'error': 'Database connection failed'}), 500
         
         # Get last 24 hours
@@ -508,7 +621,7 @@ def handle_live_data_request():
     """Handle live data requests"""
     try:
         collection = get_collection()
-        if collection:
+        if collection is not None:
             # Get recent events
             five_minutes_ago = datetime.utcnow() - timedelta(minutes=5)
             events = list(collection.find({
@@ -533,5 +646,15 @@ if __name__ == '__main__':
     
     logger.info(f"Starting OpenVPN Dashboard on {host}:{port}")
     logger.info(f"Debug mode: {debug}")
+    logger.info(f"MongoDB URI: {os.getenv('MONGODB_URI', 'NOT_SET')}")
+    logger.info(f"MongoDB Database: {os.getenv('MONGODB_DATABASE', 'NOT_SET')}")
+    logger.info(f"MongoDB Collection: {os.getenv('MONGODB_COLLECTION', 'NOT_SET')}")
     
-    socketio.run(app, host=host, port=port, debug=debug)
+    # Test server detection at startup
+    try:
+        servers = get_all_servers()
+        logger.info(f"Startup test: Found {len(servers)} servers")
+    except Exception as e:
+        logger.error(f"Startup test failed: {e}")
+    
+    socketio.run(app, host=host, port=port, debug=debug, use_reloader=False)
