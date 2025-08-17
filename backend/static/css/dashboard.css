@@ -473,6 +473,66 @@ body {
     animation: fadeIn 0.3s ease-out;
 }
 
+/* User Analytics Styles */
+.user-item {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 8px;
+    transition: all 0.2s ease;
+}
+
+.user-item:hover {
+    background: #e9ecef;
+    border-color: #dee2e6;
+}
+
+.user-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.username {
+    font-weight: 600;
+    color: #495057;
+    font-size: 1rem;
+}
+
+.connection-count {
+    background: #007bff;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.user-details {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.last-connection {
+    color: #6c757d;
+}
+
+.servers {
+    color: #495057;
+    font-weight: 500;
+    background: #e9ecef;
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: inline-block;
+    max-width: 100%;
+    word-wrap: break-word;
+}
+
 /* Alert Styles */
 .alert {
     padding: 12px 16px;

@@ -202,17 +202,24 @@ class OpenVPNDashboard {
             return;
         }
         
-        const html = users.slice(0, 10).map(user => `
-            <div class="user-item">
-                <div class="user-info">
-                    <span class="username">${user._id}</span>
-                    <span class="connection-count">${user.connection_count} connections</span>
+        const html = users.slice(0, 10).map(user => {
+            // Format server list
+            const servers = user.servers || [];
+            const serverList = servers.length > 0 ? servers.join(', ') : 'No servers';
+            
+            return `
+                <div class="user-item">
+                    <div class="user-info">
+                        <span class="username">${user._id}</span>
+                        <span class="connection-count">${user.connection_count} connections</span>
+                    </div>
+                    <div class="user-details">
+                        <span class="last-connection">Last: ${new Date(user.last_connection).toLocaleDateString()}</span>
+                        <span class="servers">Servers: ${serverList}</span>
+                    </div>
                 </div>
-                <div class="user-details">
-                    <span class="last-connection">Last: ${new Date(user.last_connection).toLocaleDateString()}</span>
-                </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
         
         container.innerHTML = html;
     }
