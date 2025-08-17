@@ -182,7 +182,7 @@ def check_server_connectivity(server_name, server_location):
         latest_connection = collection.find_one({
             'server_name': server_name,
             'server_location': server_location,
-            'type': 'connection_event',
+            'event_type': 'connect',
             'timestamp': {'$gte': cutoff_time}
         }, sort=[('timestamp', -1)])
         
@@ -217,7 +217,7 @@ def get_server_status(server_name, server_location):
         latest_connection = collection.find_one({
             'server_name': server_name,
             'server_location': server_location,
-            'type': 'connection_event'
+            'event_type': 'connect'
         }, sort=[('timestamp', -1)])
         
         # Extract public IP and uptime from system stats
@@ -285,7 +285,7 @@ def get_server_connections(server_name, server_location, limit=50):
         connections = list(collection.find({
             'server_name': server_name,
             'server_location': server_location,
-            'type': 'connection_event'
+            'event_type': 'connect'
         }, sort=[('timestamp', -1)], limit=limit))
         
         # Convert ObjectId to string for JSON serialization
@@ -310,7 +310,7 @@ def get_connection_analytics(days=7):
         pipeline = [
             {
                 '$match': {
-                    'type': 'connection_event',
+                    'event_type': 'connect',
                     'timestamp': {'$gte': cutoff_date}
                 }
             },
@@ -358,7 +358,7 @@ def get_user_analytics(days=30):
         pipeline = [
             {
                 '$match': {
-                    'type': 'connection_event',
+                    'event_type': 'connect',
                     'timestamp': {'$gte': cutoff_date}
                 }
             },
