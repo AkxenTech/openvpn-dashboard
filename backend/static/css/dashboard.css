@@ -533,6 +533,23 @@ body {
     word-wrap: break-word;
 }
 
+/* Disk Usage Color Coding */
+.disk-usage-green {
+    color: #28a745 !important;
+    font-weight: 600;
+}
+
+.disk-usage-orange {
+    color: #fd7e14 !important;
+    font-weight: 600;
+}
+
+.disk-usage-red {
+    color: #dc3545 !important;
+    font-weight: 700;
+    font-weight: bold;
+}
+
 /* Alert Styles */
 .alert {
     padding: 12px 16px;

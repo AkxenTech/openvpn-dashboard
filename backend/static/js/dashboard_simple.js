@@ -67,6 +67,28 @@ class OpenVPNDashboard {
         const lastSeen = server.last_system_update ? new Date(server.last_system_update).toLocaleString() : 'Never';
         const uptime = server.uptime ? this.formatUptime(server.uptime) : 'Unknown';
         
+        // Format disk usage with color coding
+        let diskUsageHtml = '';
+        if (server.disk_usage_percent !== null && server.disk_usage_percent !== undefined) {
+            const diskPercent = server.disk_usage_percent;
+            let diskColorClass = '';
+            
+            if (diskPercent <= 65) {
+                diskColorClass = 'disk-usage-green';
+            } else if (diskPercent > 65 && diskPercent <= 75) {
+                diskColorClass = 'disk-usage-orange';
+            } else if (diskPercent > 75) {
+                diskColorClass = 'disk-usage-red';
+            }
+            
+            diskUsageHtml = `
+                <div class="detail">
+                    <span class="label">Disk Usage:</span>
+                    <span class="value ${diskColorClass}">${diskPercent.toFixed(1)}%</span>
+                </div>
+            `;
+        }
+        
         card.innerHTML = `
             <div class="server-header">
                 <h3>${server.server_name}</h3>
@@ -85,6 +107,7 @@ class OpenVPNDashboard {
                     <span class="label">Uptime:</span>
                     <span class="value">${uptime}</span>
                 </div>
+                ${diskUsageHtml}
                 <div class="detail">
                     <span class="label">Last Seen:</span>
                     <span class="value">${lastSeen}</span>
